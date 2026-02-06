@@ -41,11 +41,18 @@ class CSVProcessingService:
             '主客户名称': 'main_cust_name',
             '证件类型': 'id_type',
             '证件号': 'id_number',
+            '对公对私标志':'main_cust_type',
             '主客户职业行业': 'main_cust_industry',
             '主客户性别': 'main_cust_gender',
             '主客户开户日期': 'main_cust_open_date',
             '主客户地址': 'main_cust_addr',
             '主客户联系电话': 'main_cust_phone_number',
+            '对公客户营业地址':'main_biz_addr',
+            '注册资本':'main_reg_fund_am',
+            '经营范围':'main_biz_scope',
+            '法定代表人名称':'main_legal_name',
+            '法定代表人证件类型':'main_legal_cert_type',
+            '法定代表人证件号码':'main_legal_cert',
             '可疑模型编号': 'model_id',
             '可疑模型名称': 'model_name',
             '可疑特征规则编号': 'suspect_rule_id',
@@ -230,14 +237,9 @@ class CSVProcessingService:
                 chunk_df = chunk_df.copy()
                 chunk_df['case_trans_key'] = chunk_df['case_id'].astype(str) + '_' + chunk_df['trans_key'].astype(str)
 
-                # 使用向量化操作过滤掉之前已见过的case_id+trans_key组合
-                mask = ~chunk_df['case_trans_key'].isin(self.seen_case_trans_keys)
-                chunk_df = chunk_df[mask]
-
-                # 批量更新已见的case_id+trans_key集合
-                if len(chunk_df) > 0:
-                    new_case_trans_keys = set(chunk_df['case_trans_key'])
-                    self.seen_case_trans_keys.update(new_case_trans_keys)
+                # 对于单次处理，只进行块内去重，不进行跨块去重
+                # 使用groupby进行块内去重，保留每组的第一条记录
+                chunk_df = chunk_df.drop_duplicates(subset=['case_trans_key'], keep='first')
 
                 # 移除临时的组合键
                 chunk_df = chunk_df.drop('case_trans_key', axis=1)
@@ -260,6 +262,12 @@ class CSVProcessingService:
 
                 if 'income_pay_flag' in g.columns and not pd.api.types.is_string_dtype(g['income_pay_flag']):
                     g['income_pay_flag'] = g['income_pay_flag'].astype(str).fillna('')
+
+                # 判断案例类型：C=对公, I=对私
+                cust_type = self._safe_convert_to_str(
+                    g['main_cust_type'].iloc[0] if len(g) > 0 and 'main_cust_type' in g.columns else '', '')
+                is_corporate = cust_type.upper() == 'C'  # C表示对公客户
+                is_individual = cust_type.upper() == 'I'  # I表示对私客户
 
                 # 夜间交易（23点-6点）- 只对有效小时数计算
                 valid_hours = g['hour'].dropna()
@@ -419,28 +427,77 @@ class CSVProcessingService:
                 first_trans_date = valid_trans_dates.min() if len(valid_trans_dates) > 0 else pd.NaT
                 last_trans_date = valid_trans_dates.max() if len(valid_trans_dates) > 0 else pd.NaT
 
-                # 基础聚合结果
-                result_dict = {
-                    'main_cust_name': self._safe_convert_to_str(
-                        g['main_cust_name'].iloc[0] if len(g) > 0 and 'main_cust_name' in g.columns else '', ''),
-                    'main_cust_id': self._safe_convert_to_str(
-                        g['main_cust_id'].iloc[0] if len(g) > 0 and 'main_cust_id' in g.columns else '', ''),
-                    'main_cust_industry': self._safe_convert_to_str(
-                        g['main_cust_industry'].iloc[0] if len(g) > 0 and 'main_cust_industry' in g.columns else '',
-                        ''),
-                    'main_cust_gender': self._safe_convert_to_str(
-                        g['main_cust_gender'].iloc[0] if len(g) > 0 and 'main_cust_gender' in g.columns else '', ''),
-                    'main_cust_open_date': self._safe_convert_to_str(
-                        g['main_cust_open_date'].iloc[0] if len(g) > 0 and 'main_cust_open_date' in g.columns else '',
-                        ''),
-                    'main_cust_addr': self._safe_convert_to_str(
-                        g['main_cust_addr'].iloc[0] if len(g) > 0 and 'main_cust_addr' in g.columns else '', ''),
-                    'main_cust_phone_number': self._safe_convert_to_str(g['main_cust_phone_number'].iloc[0] if len(
-                        g) > 0 and 'main_cust_phone_number' in g.columns else '', ''),
-                    'id_type': self._safe_convert_to_str(
-                        g['id_type'].iloc[0] if len(g) > 0 and 'id_type' in g.columns else '', ''),
-                    'id_number': self._safe_convert_to_str(
-                        g['id_number'].iloc[0] if len(g) > 0 and 'id_number' in g.columns else '', ''),
+                # 基础聚合结果 - 根据对公/对私类型选择不同的字段
+                if is_corporate:
+                    # 对公客户基本信息
+                    result_dict = {
+                        'main_cust_name': self._safe_convert_to_str(
+                            g['main_cust_name'].iloc[0] if len(g) > 0 and 'main_cust_name' in g.columns else '', ''),
+                        'main_cust_id': self._safe_convert_to_str(
+                            g['main_cust_id'].iloc[0] if len(g) > 0 and 'main_cust_id' in g.columns else '', ''),
+                        'main_cust_industry': self._safe_convert_to_str(
+                            g['main_cust_industry'].iloc[0] if len(g) > 0 and 'main_cust_industry' in g.columns else '',
+                            ''),
+                        'main_cust_gender': '',  # 对公客户无性别字段
+                        'main_cust_open_date': self._safe_convert_to_str(
+                            g['main_cust_open_date'].iloc[0] if len(g) > 0 and 'main_cust_open_date' in g.columns else '',
+                            ''),
+                        'main_cust_addr': self._safe_convert_to_str(
+                            g['main_biz_addr'].iloc[0] if len(g) > 0 and 'main_biz_addr' in g.columns else 
+                            g['main_cust_addr'].iloc[0] if len(g) > 0 and 'main_cust_addr' in g.columns else '', ''),
+                        'main_cust_phone_number': self._safe_convert_to_str(
+                            g['main_cust_phone_number'].iloc[0] if len(g) > 0 and 'main_cust_phone_number' in g.columns else '', ''),
+                        'id_type': self._safe_convert_to_str(
+                            g['id_type'].iloc[0] if len(g) > 0 and 'id_type' in g.columns else '', ''),
+                        'id_number': self._safe_convert_to_str(
+                            g['id_number'].iloc[0] if len(g) > 0 and 'id_number' in g.columns else '', ''),
+                        'faren_id_type': self._safe_convert_to_str(
+                            g['main_legal_cert_type'].iloc[0] if len(g) > 0 and 'main_legal_cert_type' in g.columns else 
+                            g['id_type'].iloc[0] if len(g) > 0 and 'id_type' in g.columns else '', ''),
+                        'faren_id_number': self._safe_convert_to_str(
+                            g['main_legal_cert'].iloc[0] if len(g) > 0 and 'main_legal_cert' in g.columns else 
+                            g['id_number'].iloc[0] if len(g) > 0 and 'id_number' in g.columns else '', ''),
+                        'reg_fund_amount': self._safe_convert_to_str(
+                            g['main_reg_fund_am'].iloc[0] if len(g) > 0 and 'main_reg_fund_am' in g.columns else '', ''),
+                        'biz_scope': self._safe_convert_to_str(
+                            g['main_biz_scope'].iloc[0] if len(g) > 0 and 'main_biz_scope' in g.columns else '', ''),
+                        'legal_name': self._safe_convert_to_str(
+                            g['main_legal_name'].iloc[0] if len(g) > 0 and 'main_legal_name' in g.columns else '', ''),
+                        'cust_type_flag': '对公',
+                    }
+                else:
+                    # 对私客户基本信息
+                    result_dict = {
+                        'main_cust_name': self._safe_convert_to_str(
+                            g['main_cust_name'].iloc[0] if len(g) > 0 and 'main_cust_name' in g.columns else '', ''),
+                        'main_cust_id': self._safe_convert_to_str(
+                            g['main_cust_id'].iloc[0] if len(g) > 0 and 'main_cust_id' in g.columns else '', ''),
+                        'main_cust_industry': self._safe_convert_to_str(
+                            g['main_cust_industry'].iloc[0] if len(g) > 0 and 'main_cust_industry' in g.columns else '',
+                            ''),
+                        'main_cust_gender': self._safe_convert_to_str(
+                            g['main_cust_gender'].iloc[0] if len(g) > 0 and 'main_cust_gender' in g.columns else '', ''),
+                        'main_cust_open_date': self._safe_convert_to_str(
+                            g['main_cust_open_date'].iloc[0] if len(g) > 0 and 'main_cust_open_date' in g.columns else '',
+                            ''),
+                        'main_cust_addr': self._safe_convert_to_str(
+                            g['main_cust_addr'].iloc[0] if len(g) > 0 and 'main_cust_addr' in g.columns else '', ''),
+                        'main_cust_phone_number': self._safe_convert_to_str(
+                            g['main_cust_phone_number'].iloc[0] if len(g) > 0 and 'main_cust_phone_number' in g.columns else '', ''),
+                        'id_type': self._safe_convert_to_str(
+                            g['id_type'].iloc[0] if len(g) > 0 and 'id_type' in g.columns else '', ''),
+                        'id_number': self._safe_convert_to_str(
+                            g['id_number'].iloc[0] if len(g) > 0 and 'id_number' in g.columns else '', ''),
+                        'faren_id_type':'', # 对私没有法人
+                        'faren_id_number':'', # 对私没有法人身份证
+                        'reg_fund_amount': '',  # 对私客户无注册资本
+                        'biz_scope': '',       # 对私客户无经营范围
+                        'legal_name': '',      # 对私客户无法定代表人
+                        'cust_type_flag': '对私',
+                    }
+
+                # 公共交易相关信息
+                result_dict.update({
                     'total_trans_amt': total_trans_amt,
                     'trans_count': trans_count,
                     'avg_trans_amt': avg_trans_amt,
@@ -474,7 +531,7 @@ class CSVProcessingService:
                     'ipv6_addr': self._get_representative_ip(g, 'ipv6_addr'),
                     'ip_addr': self._get_representative_ip(g, 'ip_addr'),
                     'mac_addr': self._get_representative_mac(g, 'mac_addr'),
-                }
+                })
 
                 # 根据条件判断是否涉嫌网络赌博
                 is_network_gambling = False
@@ -574,16 +631,44 @@ class CSVProcessingService:
             self.seen_id_pairs = set()  # 重置已见的id_columns组合
 
             # 使用分块读取处理大文件
-            # 设置dtype为str以避免混合类型问题，然后在后续处理中进行适当转换
-            chunk_iter = pd.read_csv(
-                input_csv_path,
-                encoding='utf-8',
-                header=None,
-                names=list(self.column_mapping.keys()),
-                chunksize=self.chunk_size,
-                dtype=str,  # 使用字符串类型避免混合类型问题
-                on_bad_lines='skip'  # 跳过格式错误的行
-            )
+            # 首先检查是否有标题行
+            try:
+                # 尝试读取前几行来判断是否有标题
+                sample_df = pd.read_csv(input_csv_path, encoding='utf-8', nrows=2)
+                has_header = list(sample_df.columns)[0] in self.column_mapping.keys()
+                
+                if has_header:
+                    # 有标题行的情况
+                    chunk_iter = pd.read_csv(
+                        input_csv_path,
+                        encoding='utf-8',
+                        header=0,  # 使用第一行作为标题
+                        chunksize=self.chunk_size,
+                        dtype=str,
+                        on_bad_lines='skip'
+                    )
+                else:
+                    # 无标题行的情况
+                    chunk_iter = pd.read_csv(
+                        input_csv_path,
+                        encoding='utf-8',
+                        header=None,
+                        names=list(self.column_mapping.keys()),
+                        chunksize=self.chunk_size,
+                        dtype=str,
+                        on_bad_lines='skip'
+                    )
+            except Exception:
+                # 默认使用无标题行的方式
+                chunk_iter = pd.read_csv(
+                    input_csv_path,
+                    encoding='utf-8',
+                    header=None,
+                    names=list(self.column_mapping.keys()),
+                    chunksize=self.chunk_size,
+                    dtype=str,
+                    on_bad_lines='skip'
+                )
 
             for chunk_idx, chunk_df in enumerate(chunk_iter):
                 logger.info(f"正在处理第 {chunk_idx + 1} 个数据块，包含 {len(chunk_df)} 行数据")
@@ -668,7 +753,8 @@ class CSVProcessingService:
             # 确保所有列都存在
             expected_columns = [
                 'case_id', 'main_cust_name', 'main_cust_id', 'main_cust_industry',
-                'main_cust_gender', 'main_cust_open_date','main_cust_addr','main_cust_phone_number', 'id_type', 'id_number',
+                'main_cust_gender', 'main_cust_open_date','main_cust_addr','main_cust_phone_number', 
+                'id_type', 'id_number', 'faren_id_type','faren_id_number','reg_fund_amount', 'biz_scope', 'legal_name', 'cust_type_flag',
                 'total_trans_amt', 'trans_count', 'avg_trans_amt',
                 'max_trans_amt', 'first_trans_date', 'last_trans_date',
                 'report_start_date', 'report_end_date', 'night_trans_count',
@@ -676,7 +762,7 @@ class CSVProcessingService:
                 'main_tnx_channels', 'sample_trx_list', 'debit_count',
                 'debit_amt', 'credit_count', 'credit_amt',
                 'model_name', 'is_network_gambling_suspected', 'tr_org','features','highest_score',
-                'ipv6_addr','ip_addr','mac_addr', 'integer_trans_info'
+                'ipv6_addr','ip_addr','mac_addr'
             ]
 
             for col in expected_columns:
