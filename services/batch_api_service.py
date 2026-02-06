@@ -118,7 +118,7 @@ class BatchApiService:
         # 处理.unl.gz文件 - 只处理特定名称的文件
         target_unl_files = []
         for unl_gz_file in unl_gz_files:
-            if unl_gz_file.lower() in ['t3b_case_aml_llmp.unl.gz', 't3b_case_aml_llmp.unl.gz']:
+            if unl_gz_file.lower() in ['amls_llmp_t3b_case_aml_llmp.unl.gz', 't3b_case_aml_llmp.unl.gz']:
                 target_unl_files.append(unl_gz_file)
         
         if target_unl_files:
