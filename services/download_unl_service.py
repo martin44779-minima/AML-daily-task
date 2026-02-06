@@ -14,11 +14,17 @@ class DownloadUnlService:
     """UNL文件下载服务类"""
 
     def __init__(self):
-        # 从环境变量获取配置
-        self.download_url = os.getenv('UNL_DOWNLOAD_URL', '')
-        self.file_name_list = os.getenv('UNL_FILE_NAME_LIST', '').split(',') if os.getenv('UNL_FILE_NAME_LIST') else []
-        self.file_svr_id = os.getenv('UNL_FILE_SVR_ID', '')
-        self.rmt_pub_path = os.getenv('UNL_RMT_PUB_PATH', '')
+        # 从Settings类获取配置
+        self.download_url = Settings.UNL_DOWNLOAD_URL
+        self.file_name_list = Settings.UNL_FILE_NAME_LIST.split(',') if Settings.UNL_FILE_NAME_LIST else []
+        self.file_svr_id = Settings.UNL_FILE_SVR_ID
+        self.rmt_pub_path = Settings.UNL_RMT_PUB_PATH
+        
+        # 添加调试日志
+        logger.debug(f"DownloadUnlService初始化 - download_url: {self.download_url}")
+        logger.debug(f"DownloadUnlService初始化 - file_name_list: {self.file_name_list}")
+        logger.debug(f"DownloadUnlService初始化 - file_svr_id: {self.file_svr_id}")
+        logger.debug(f"DownloadUnlService初始化 - rmt_pub_path: '{self.rmt_pub_path}' (长度: {len(self.rmt_pub_path)})")
         
     def validate_config(self) -> bool:
         """验证配置是否完整"""
@@ -31,9 +37,9 @@ class DownloadUnlService:
         if not self.file_svr_id:
             logger.error("未配置UNL_FILE_SVR_ID环境变量")
             return False
-        if not self.rmt_pub_path:
-            logger.error("未配置UNL_RMT_PUB_PATH环境变量")
-            return False
+        # if not self.rmt_pub_path:
+        #     logger.error("未配置UNL_RMT_PUB_PATH环境变量")
+        #     return False
         return True
 
     def download_unl_files(self) -> List[str]:

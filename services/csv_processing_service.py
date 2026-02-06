@@ -8,6 +8,10 @@ import tempfile
 from pathlib import Path
 import numpy as np
 import hashlib
+import csv
+
+# 增加CSV字段大小限制以处理大字段
+csv.field_size_limit(1024 * 1024)  # 设置为1MB
 
 from config.settings import Settings
 

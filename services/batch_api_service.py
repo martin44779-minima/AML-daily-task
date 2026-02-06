@@ -187,7 +187,35 @@ class BatchApiService:
                 csv_string_io = io.StringIO(csv_content)
                 
                 # 读取CSV内容，直接处理数据行
-                csv_reader = csv.reader(csv_string_io)
+                try:
+                    csv_reader = csv.reader(csv_string_io)
+                except csv.Error as e:
+                    if "field larger than field limit" in str(e):
+                        logger.error(f"CSV字段大小超出限制: {str(e)}")
+                        # 使用专门的工具处理字段限制问题
+                        from utils.csv_field_limit_handler import increase_csv_field_limit, safe_csv_reader
+                        
+                        # 先分析文件统计信息
+                        temp_stats_path = processed_file_path
+                        try:
+                            import utils.csv_field_limit_handler as handler
+                            stats = handler.get_csv_field_stats(temp_stats_path, sample_lines=100)
+                            if stats:
+                                recommended_limit = handler.recommend_field_limit(stats)
+                                logger.info(f"推荐字段限制: {recommended_limit}")
+                                increase_csv_field_limit(recommended_limit)
+                            else:
+                                # 如果无法分析，直接增加限制
+                                increase_csv_field_limit()
+                        except Exception as stat_error:
+                            logger.warning(f"无法分析CSV统计信息: {stat_error}")
+                            increase_csv_field_limit()
+                        
+                        # 重新创建reader
+                        csv_string_io.seek(0)
+                        csv_reader = csv.reader(csv_string_io)
+                    else:
+                        raise e
                 
                 # 从task_data中获取并发数设置，如果没有则使用配置中的默认值
                 max_workers = task_data.get('max_workers', Settings.TASK_CONCURRENCY)

@@ -15,6 +15,12 @@ class Settings:
     CSV_PROCESSING_CHUNK_SIZE = int(os.getenv('CSV_PROCESSING_CHUNK_SIZE', '50000'))
     CSV_PROCESSING_TEMP_DIR = os.getenv('CSV_PROCESSING_TEMP_DIR', './temp_csv_processing')
     
+    # UNL文件下载相关配置
+    UNL_DOWNLOAD_URL = os.getenv('UNL_DOWNLOAD_URL', '')
+    UNL_FILE_NAME_LIST = os.getenv('UNL_FILE_NAME_LIST', '')
+    UNL_FILE_SVR_ID = os.getenv('UNL_FILE_SVR_ID', '')
+    UNL_RMT_PUB_PATH = os.getenv('UNL_RMT_PUB_PATH', '')
+    
     # 动态获取所有任务配置
     for key, value in os.environ.items():
         if key.startswith('TASK_'):
