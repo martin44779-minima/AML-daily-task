@@ -12,8 +12,16 @@ import time
 import threading
 from flask import Flask
 
-# 配置日志
-logging.basicConfig(level=logging.INFO)
+# 配置日志（强制 utf-8 输出，避免 Windows 终端乱码）
+import sys
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s:%(name)s:%(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
 
 def init_database():
     """初始化数据库"""

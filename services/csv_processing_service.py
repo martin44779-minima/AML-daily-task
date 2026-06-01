@@ -535,6 +535,8 @@ class CSVProcessingService:
                     'ipv6_addr': self._get_representative_ip(g, 'ipv6_addr'),
                     'ip_addr': self._get_representative_ip(g, 'ip_addr'),
                     'mac_addr': self._get_representative_mac(g, 'mac_addr'),
+                    'card_no':self._safe_convert_to_str(
+                            g['card_no'].iloc[0] if len(g) > 0 and 'card_no' in g.columns else '', ''),
                 })
 
                 # 根据条件判断是否涉嫌网络赌博
@@ -755,18 +757,51 @@ class CSVProcessingService:
             result = pd.DataFrame(list(all_results.values()))
 
             # 确保所有列都存在
+            # 期望输出字段列表及中英文映射
             expected_columns = [
-                'case_id', 'main_cust_name', 'main_cust_id', 'main_cust_industry',
-                'main_cust_gender', 'main_cust_open_date','main_cust_addr','main_cust_phone_number', 
-                'id_type', 'id_number', 'faren_id_type','faren_id_number','reg_fund_amount', 'biz_scope', 'legal_name', 'cust_type_flag',
-                'total_trans_amt', 'trans_count', 'avg_trans_amt',
-                'max_trans_amt', 'first_trans_date', 'last_trans_date',
-                'report_start_date', 'report_end_date', 'night_trans_count',
-                'risk_keywords', 'counterparty_sample', 'top_opposing_areas',
-                'main_tnx_channels', 'sample_trx_list', 'debit_count',
-                'debit_amt', 'credit_count', 'credit_amt',
-                'model_name', 'is_network_gambling_suspected', 'tr_org','features','highest_score',
-                'ipv6_addr','ip_addr','mac_addr'
+                'case_id',              # 案例编号
+                'main_cust_name',       # 主客户名称
+                'main_cust_id',         # 主客户编号
+                'main_cust_industry',   # 主客户职业行业
+                'main_cust_gender',     # 主客户性别
+                'main_cust_open_date',  # 主客户开户日期
+                'main_cust_addr',       # 主客户地址
+                'main_cust_phone_number', # 主客户联系电话
+                'id_type',              # 证件类型
+                'id_number',            # 证件号
+                'faren_id_type',        # 法定代表人证件类型
+                'faren_id_number',      # 法定代表人证件号码
+                'reg_fund_amount',      # 注册资本
+                'biz_scope',            # 经营范围
+                'legal_name',           # 法定代表人名称
+                'cust_type_flag',       # 客户类型标志
+                'total_trans_amt',      # 总交易金额
+                'trans_count',          # 交易笔数
+                'avg_trans_amt',        # 平均交易金额
+                'max_trans_amt',        # 最大交易金额
+                'first_trans_date',     # 首笔交易日期
+                'last_trans_date',      # 末笔交易日期
+                'report_start_date',    # 报告起始日期
+                'report_end_date',      # 报告结束日期
+                'night_trans_count',    # 夜间交易笔数
+                'risk_keywords',        # 风险关键词
+                'counterparty_sample',  # 交易对手样本
+                'top_opposing_areas',   # 主要交易对手地区
+                'main_tnx_channels',    # 主要交易渠道
+                'sample_trx_list',      # 交易样本列表
+                'debit_count',          # 借方笔数
+                'debit_amt',            # 借方金额
+                'credit_count',         # 贷方笔数
+                'credit_amt',           # 贷方金额
+                'model_name',           # 模型名称
+                'is_network_gambling_suspected', # 是否涉嫌反洗钱规则
+                'tr_org',               # 交易机构
+                'features',             # 特征信息
+                'highest_score',        # 最高评分
+                'ipv6_addr',            # IPv6地址
+                'ip_addr',              # IP地址
+                'mac_addr',              # MAC地址
+                'card_no'  # 卡号
             ]
 
             for col in expected_columns:
